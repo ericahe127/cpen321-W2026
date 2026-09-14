@@ -29,11 +29,16 @@ import com.example.cpen321application.network.fetchServerInfo
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginServerScreen(apiBaseUrl: String, googleClientId: String) {
+fun LoginServerScreen(
+    serverAddress: String,
+    useHttps: Boolean,
+    googleClientId: String
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var info by remember { mutableStateOf<ServerInfo?>(null) }
@@ -75,7 +80,8 @@ fun LoginServerScreen(apiBaseUrl: String, googleClientId: String) {
             errorText = null
             try {
                 info = fetchServerInfo(
-                    apiBaseUrl = apiBaseUrl,
+                    serverAddress = serverAddress,
+                    useHttps = useHttps,
                     googleName = account.displayName ?: account.email ?: "Google user"
                 )
             } catch (e: Exception) {
@@ -89,18 +95,19 @@ fun LoginServerScreen(apiBaseUrl: String, googleClientId: String) {
     val signInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode != Activity.RESULT_OK) {
-            errorText = "Google sign-in was cancelled."
-            return@rememberLauncherForActivityResult
-        }
-
         try {
             val account = GoogleSignIn
                 .getSignedInAccountFromIntent(result.data)
                 .getResult(ApiException::class.java)
             loadServerInfo(account)
         } catch (e: ApiException) {
-            errorText = "Google sign-in failed: ${e.statusCode}"
+            errorText = googleSignInErrorMessage(e.statusCode)
+        } catch (e: Exception) {
+            errorText = if (result.resultCode == Activity.RESULT_OK) {
+                "Google sign-in failed: ${e.message ?: e.javaClass.simpleName}"
+            } else {
+                "Google sign-in was cancelled before an account was selected."
+            }
         }
     }
 
@@ -154,6 +161,19 @@ fun LoginServerScreen(apiBaseUrl: String, googleClientId: String) {
         }
     }
 }
+
+private fun googleSignInErrorMessage(statusCode: Int): String =
+    when (statusCode) {
+        GoogleSignInStatusCodes.SIGN_IN_CANCELLED ->
+            "Google sign-in was cancelled before an account was selected."
+        GoogleSignInStatusCodes.SIGN_IN_FAILED ->
+            "Google sign-in failed. Check the OAuth client package name and SHA-1."
+        GoogleSignInStatusCodes.NETWORK_ERROR ->
+            "Google sign-in failed because of a network error."
+        GoogleSignInStatusCodes.DEVELOPER_ERROR ->
+            "Google sign-in failed: developer error. Check the Android OAuth client package name, SHA-1, and web client ID."
+        else -> "Google sign-in failed: status code $statusCode"
+    }
 
 @Composable
 private fun InfoRow(label: String, value: String) {

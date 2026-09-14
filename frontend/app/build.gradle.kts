@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Machine-specific config (SDK path, backend URL, OAuth client ID) lives in
+// Machine-specific config (SDK path, server address, OAuth client ID) lives in
 // local.properties, which is gitignored. See local.properties.example.
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
@@ -30,12 +30,17 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Baked in at build time from local.properties — never hard-code URLs or
-        // OAuth IDs in source. Emulator reaches the host via 10.0.2.2, not localhost.
+        // Baked in at build time from local.properties - never hard-code server
+        // addresses or OAuth IDs in source.
         buildConfigField(
             "String",
-            "API_BASE_URL",
-            "\"${localProperty("API_BASE_URL", "http://10.0.2.2:3000")}\""
+            "SERVER_ADDRESS",
+            "\"${localProperty("SERVER_ADDRESS", "10.0.2.2:3000")}\""
+        )
+        buildConfigField(
+            "boolean",
+            "USE_HTTPS",
+            localProperty("USE_HTTPS", "false")
         )
         buildConfigField(
             "String",
@@ -80,6 +85,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.play.services.auth)
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

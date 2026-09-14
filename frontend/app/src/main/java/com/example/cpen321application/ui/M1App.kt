@@ -32,7 +32,8 @@ private val NavigationButtonHeight = 64.dp
 
 @Composable
 fun M1App(
-    apiBaseUrl: String,
+    serverAddress: String,
+    useHttps: Boolean,
     googleClientId: String,
     modifier: Modifier = Modifier
 ) {
@@ -75,10 +76,14 @@ fun M1App(
 
         when (selectedScreen) {
             M1Screen.LoginInfo -> LoginServerScreen(
-                apiBaseUrl = apiBaseUrl,
+                serverAddress = serverAddress,
+                useHttps = useHttps,
                 googleClientId = googleClientId
             )
-            M1Screen.Pixels -> PlaceholderScreen("Button 2 pixel relay is next.")
+            M1Screen.Pixels -> LiveUpdatesScreen(
+                serverAddress = serverAddress,
+                useHttps = useHttps
+            )
             M1Screen.Timer -> PlaceholderScreen("Button 3 timer is next.")
         }
     }

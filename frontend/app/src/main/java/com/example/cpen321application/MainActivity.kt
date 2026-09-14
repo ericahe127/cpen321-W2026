@@ -19,7 +19,8 @@ class MainActivity : ComponentActivity() {
             CPEN321ApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     M1App(
-                        apiBaseUrl = BuildConfig.API_BASE_URL,
+                        serverAddress = BuildConfig.SERVER_ADDRESS,
+                        useHttps = BuildConfig.USE_HTTPS,
                         googleClientId = BuildConfig.GOOGLE_CLIENT_ID,
                         modifier = Modifier.padding(innerPadding)
                     )

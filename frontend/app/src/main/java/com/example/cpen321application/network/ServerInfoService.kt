@@ -8,14 +8,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 suspend fun fetchServerInfo(
-    apiBaseUrl: String,
+    serverAddress: String,
+    useHttps: Boolean,
     googleName: String
 ): ServerInfo = withContext(Dispatchers.IO) {
-    val baseUrl = apiBaseUrl.trimEnd('/')
-    val name = fetchJson("$baseUrl/api/name")
-    val serverIp = fetchJson("$baseUrl/api/server-ip")
-    val serverTime = fetchJson("$baseUrl/api/server-time")
-    val clientIp = fetchJson("$baseUrl/api/client-ip")
+    val name = fetchJson(restUrl(serverAddress, useHttps, "/api/name"))
+    val serverIp = fetchJson(restUrl(serverAddress, useHttps, "/api/server-ip"))
+    val serverTime = fetchJson(restUrl(serverAddress, useHttps, "/api/server-time"))
+    val clientIp = fetchJson(restUrl(serverAddress, useHttps, "/api/client-ip"))
     val now = ZonedDateTime.now()
 
     ServerInfo(
