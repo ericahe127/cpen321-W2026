@@ -84,7 +84,7 @@ fun M1App(
                 serverAddress = serverAddress,
                 useHttps = useHttps
             )
-            M1Screen.Timer -> PlaceholderScreen("Button 3 timer is next.")
+            M1Screen.Timer -> TimerScreen()
         }
     }
 }
