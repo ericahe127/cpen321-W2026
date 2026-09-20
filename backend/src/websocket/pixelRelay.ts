@@ -48,11 +48,6 @@ export function attachPixelRelay(server: Server): () => void {
     courseSocket.on('message', (message) => {
       const pixelMessage = message.toString();
       relayedMessageCount += 1;
-      if (relayedMessageCount <= 5 || relayedMessageCount % 100 === 0) {
-        console.log(
-          `Relayed pixel message #${relayedMessageCount} to ${clientServer.clients.size} client(s): ${pixelMessage}`
-        );
-      }
       broadcast(pixelMessage);
     });
 

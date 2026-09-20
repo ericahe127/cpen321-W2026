@@ -92,3 +92,44 @@ describe('Unmocked: GET /api/client-ip', () => {
     expect(response.body).toEqual({ ipAddress: '198.51.100.7' });
   });
 });
+
+// Interface POST /api/auth/google
+describe('Unmocked: POST /api/auth/google', () => {
+  const originalGoogleClientId = process.env.GOOGLE_CLIENT_ID;
+
+  afterEach(() => {
+    if (originalGoogleClientId === undefined) {
+      delete process.env.GOOGLE_CLIENT_ID;
+    } else {
+      process.env.GOOGLE_CLIENT_ID = originalGoogleClientId;
+    }
+  });
+
+  // Input: POST request without a Google ID token
+  // Expected status code: 400
+  // Expected behavior: request is rejected before any token verification
+  // Expected output: { error: "Missing Google ID token" }
+  test('Rejects missing Google ID token', async () => {
+    const response = await request(createApp()).post('/api/auth/google').send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'Missing Google ID token' });
+  });
+
+  // Input: POST request with a token while backend GOOGLE_CLIENT_ID is unset
+  // Expected status code: 500
+  // Expected behavior: backend reports deployment configuration problem
+  // Expected output: { error: "GOOGLE_CLIENT_ID is not configured on the backend" }
+  test('Reports missing backend Google client ID', async () => {
+    delete process.env.GOOGLE_CLIENT_ID;
+
+    const response = await request(createApp())
+      .post('/api/auth/google')
+      .send({ idToken: 'not-a-real-token' });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      error: 'GOOGLE_CLIENT_ID is not configured on the backend',
+    });
+  });
+});

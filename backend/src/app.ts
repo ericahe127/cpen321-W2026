@@ -1,10 +1,13 @@
 import express, { type Express, type Request } from 'express';
+import { OAuth2Client } from 'google-auth-library';
 import os from 'node:os';
 
 const OWNER_NAME = {
   firstName: 'Erica',
   lastName: 'He',
 } as const;
+
+const googleAuthClient = new OAuth2Client();
 
 function normalizeIpAddress(ipAddress: string): string {
   return ipAddress.trim().replace(/^::ffff:/, '');
@@ -75,6 +78,7 @@ function getServerTime(): { localTime: string; gmtOffset: string } {
 export function createApp(): Express {
   const app = express();
   app.set('trust proxy', true);
+  app.use(express.json());
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
@@ -94,6 +98,50 @@ export function createApp(): Express {
 
   app.get('/api/client-ip', (req, res) => {
     res.json({ ipAddress: getClientIp(req) });
+  });
+
+  app.post('/api/auth/google', async (req, res) => {
+    const idToken = typeof req.body?.idToken === 'string' ? req.body.idToken : '';
+    const nonce = typeof req.body?.nonce === 'string' ? req.body.nonce : '';
+    const audience = process.env.GOOGLE_CLIENT_ID?.trim();
+
+    if (!idToken) {
+      res.status(400).json({ error: 'Missing Google ID token' });
+      return;
+    }
+
+    if (!audience) {
+      res.status(500).json({ error: 'GOOGLE_CLIENT_ID is not configured on the backend' });
+      return;
+    }
+
+    try {
+      const ticket = await googleAuthClient.verifyIdToken({
+        idToken,
+        audience,
+      });
+      const payload = ticket.getPayload();
+
+      if (!payload) {
+        res.status(401).json({ error: 'Invalid Google ID token' });
+        return;
+      }
+
+      if (nonce && payload.nonce !== nonce) {
+        res.status(401).json({ error: 'Invalid Google ID token nonce' });
+        return;
+      }
+
+      res.json({
+        name: payload.name ?? payload.email ?? 'Google user',
+        firstName: payload.given_name ?? '',
+        lastName: payload.family_name ?? '',
+        email: payload.email ?? '',
+        sub: payload.sub,
+      });
+    } catch {
+      res.status(401).json({ error: 'Invalid Google ID token' });
+    }
   });
 
   app.use((_req, res) => {

@@ -1,8 +1,5 @@
 package com.example.cpen321application.ui
 
-import android.app.Activity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -24,13 +21,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.cpen321application.auth.GoogleAuthClient
+import com.example.cpen321application.auth.googleAuthErrorMessage
 import com.example.cpen321application.model.ServerInfo
+import com.example.cpen321application.network.verifyGoogleIdToken
 import com.example.cpen321application.network.fetchServerInfo
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
-import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -44,69 +39,48 @@ fun LoginServerScreen(
     var info by remember { mutableStateOf<ServerInfo?>(null) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
-
-    val signInOptions = remember(googleClientId) {
-        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .apply {
-                if (googleClientId.isNotBlank()) {
-                    requestIdToken(googleClientId)
-                }
-            }
-            .build()
-    }
-    val googleClient = remember(signInOptions) {
-        GoogleSignIn.getClient(context, signInOptions)
-    }
+    val googleAuthClient = remember { GoogleAuthClient(context) }
 
     fun signOut() {
-        isLoading = true
-        errorText = null
-        googleClient.signOut()
-            .addOnSuccessListener {
-                info = null
-            }
-            .addOnFailureListener { e ->
-                errorText = "Google sign-out failed: ${e.message ?: e.javaClass.simpleName}"
-            }
-            .addOnCompleteListener {
-                isLoading = false
-            }
-    }
-
-    fun loadServerInfo(account: GoogleSignInAccount) {
         coroutineScope.launch {
             isLoading = true
             errorText = null
             try {
-                info = fetchServerInfo(
-                    serverAddress = serverAddress,
-                    useHttps = useHttps,
-                    googleName = account.displayName ?: account.email ?: "Google user"
-                )
+                googleAuthClient.signOut()
+                info = null
             } catch (e: Exception) {
-                errorText = "Could not load Button 1 info: ${e.message ?: e.javaClass.simpleName}"
+                errorText = "Google sign-out failed: ${e.message ?: e.javaClass.simpleName}"
             } finally {
                 isLoading = false
             }
         }
     }
 
-    val signInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        try {
-            val account = GoogleSignIn
-                .getSignedInAccountFromIntent(result.data)
-                .getResult(ApiException::class.java)
-            loadServerInfo(account)
-        } catch (e: ApiException) {
-            errorText = googleSignInErrorMessage(e.statusCode)
-        } catch (e: Exception) {
-            errorText = if (result.resultCode == Activity.RESULT_OK) {
-                "Google sign-in failed: ${e.message ?: e.javaClass.simpleName}"
-            } else {
-                "Google sign-in was cancelled before an account was selected."
+    fun signInAndLoadServerInfo() {
+        coroutineScope.launch {
+            isLoading = true
+            errorText = null
+            try {
+                val signInResult = googleAuthClient.signIn(
+                    activityContext = context,
+                    webClientId = googleClientId
+                )
+                val verifiedUser = verifyGoogleIdToken(
+                    serverAddress = serverAddress,
+                    useHttps = useHttps,
+                    idToken = signInResult.idToken,
+                    nonce = signInResult.nonce
+                )
+                info = fetchServerInfo(
+                    serverAddress = serverAddress,
+                    useHttps = useHttps,
+                    googleName = verifiedUser.name
+                        .ifBlank { signInResult.displayName ?: signInResult.email ?: "Google user" }
+                )
+            } catch (e: Exception) {
+                errorText = googleAuthErrorMessage(e)
+            } finally {
+                isLoading = false
             }
         }
     }
@@ -129,7 +103,7 @@ fun LoginServerScreen(
             if (info == null) {
                 Button(
                     enabled = !isLoading,
-                    onClick = { signInLauncher.launch(googleClient.signInIntent) }
+                    onClick = { signInAndLoadServerInfo() }
                 ) {
                     Text(if (isLoading) "Loading..." else "Sign in with Google")
                 }
@@ -161,19 +135,6 @@ fun LoginServerScreen(
         }
     }
 }
-
-private fun googleSignInErrorMessage(statusCode: Int): String =
-    when (statusCode) {
-        GoogleSignInStatusCodes.SIGN_IN_CANCELLED ->
-            "Google sign-in was cancelled before an account was selected."
-        GoogleSignInStatusCodes.SIGN_IN_FAILED ->
-            "Google sign-in failed. Check the OAuth client package name and SHA-1."
-        GoogleSignInStatusCodes.NETWORK_ERROR ->
-            "Google sign-in failed because of a network error."
-        GoogleSignInStatusCodes.DEVELOPER_ERROR ->
-            "Google sign-in failed: developer error. Check the Android OAuth client package name, SHA-1, and web client ID."
-        else -> "Google sign-in failed: status code $statusCode"
-    }
 
 @Composable
 private fun InfoRow(label: String, value: String) {
