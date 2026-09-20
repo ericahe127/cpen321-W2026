@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -24,15 +25,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
+import com.example.cpen321application.network.fetchRandomDogImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 private const val SecondsPerMinute = 60
-
-private val SurpriseMessages = listOf(
-    "Time's up! Stretch, drink water, or take a 5-minute debugging break.",
-    "Timer done! Your future self says: nice work.",
-    "Done! Tiny surprise: you have defeated the countdown."
-)
 
 @Composable
 fun TimerScreen() {
@@ -40,7 +39,9 @@ fun TimerScreen() {
     var secondsText by remember { mutableStateOf("") }
     var remainingSeconds by remember { mutableIntStateOf(0) }
     var isRunning by remember { mutableStateOf(false) }
-    var surpriseText by remember { mutableStateOf<String?>(null) }
+    var dogImageUrl by remember { mutableStateOf<String?>(null) }
+    var dogImageError by remember { mutableStateOf<String?>(null) }
+    var isLoadingDogImage by remember { mutableStateOf(false) }
 
     LaunchedEffect(isRunning, remainingSeconds) {
         if (!isRunning) {
@@ -51,8 +52,20 @@ fun TimerScreen() {
             delay(1_000)
             remainingSeconds -= 1
         } else {
-            isRunning = false
-            surpriseText = SurpriseMessages.random()
+            isLoadingDogImage = true
+            dogImageError = null
+            dogImageUrl = null
+
+            try {
+                dogImageUrl = fetchRandomDogImage().imageUrl
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                dogImageError = "Time's up! Dog surprise failed to load: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                isLoadingDogImage = false
+                isRunning = false
+            }
         }
     }
 
@@ -105,36 +118,82 @@ fun TimerScreen() {
                     onClick = {
                         remainingSeconds = enteredSeconds(minutesText, secondsText)
                         isRunning = true
-                        surpriseText = null
+                        dogImageUrl = null
+                        dogImageError = null
+                        isLoadingDogImage = false
                     }
                 ) {
                     Text("Start")
                 }
                 OutlinedButton(
-                    enabled = isRunning || remainingSeconds > 0 || surpriseText != null,
+                    enabled = isRunning || remainingSeconds > 0 || dogImageUrl != null || dogImageError != null || isLoadingDogImage,
                     onClick = {
                         isRunning = false
                         remainingSeconds = 0
-                        surpriseText = null
+                        dogImageUrl = null
+                        dogImageError = null
+                        isLoadingDogImage = false
                     }
                 ) {
                     Text("Reset")
                 }
             }
 
-            surpriseText?.let { message ->
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+            if (isLoadingDogImage) {
+                Text(
+                    text = "Time's up! Fetching a dog surprise...",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+
+            dogImageUrl?.let { imageUrl ->
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = message,
-                        modifier = Modifier.padding(16.dp),
+                        text = "Time's up! Here's your furry friend!",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.primary
                     )
+                    SubcomposeAsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Random dog surprise",
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        when (painter.state) {
+                            is coil.compose.AsyncImagePainter.State.Loading,
+                            is coil.compose.AsyncImagePainter.State.Empty -> {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    CircularProgressIndicator()
+                                    Text(
+                                        text = "Loading image...",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                            is coil.compose.AsyncImagePainter.State.Error -> {
+                                Text(
+                                    text = "The dog image URL loaded, but the image could not be displayed.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            is coil.compose.AsyncImagePainter.State.Success -> {
+                                SubcomposeAsyncImageContent()
+                            }
+                        }
+                    }
                 }
+            }
+
+            dogImageError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
